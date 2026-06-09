@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:math' as math;
 
 void main() {
   runApp(const ScientificCalculatorApp());
@@ -26,10 +27,19 @@ class CalculatorHome extends StatefulWidget {
   const CalculatorHome({super.key});
 
   @override
-  State<CalculatorHome> createState() => _CalculatorHomeState();
+  Widget build(BuildContext context) {
+    return const CalculatorBody();
+  }
 }
 
-class _CalculatorHomeState extends State<CalculatorHome> {
+class CalculatorBody extends StatefulWidget {
+  const CalculatorBody({super.key});
+
+  @override
+  State<CalculatorBody> createState() => _CalculatorBodyState();
+}
+
+class _CalculatorBodyState extends State<CalculatorBody> {
   String _displayText = "0"; 
   String _historyText = ""; 
   bool _shouldShowCursor = true; 
@@ -57,10 +67,10 @@ class _CalculatorHomeState extends State<CalculatorHome> {
     });
   }
 
-  // --- Logic for Inputs ---
+  // --- إدخال البيانات للشاشة ---
   void _onInputPressed(String input) {
     setState(() {
-      if (_displayText == "0" && input != "." && !['+', '-', '×', '÷'].contains(input)) {
+      if (_displayText == "0" && !['+', '-', '×', '÷', '.', ')', '²'].contains(input)) {
         _displayText = input;
       } else {
         _displayText += input;
@@ -78,41 +88,41 @@ class _CalculatorHomeState extends State<CalculatorHome> {
   void _onDELPressed() {
     setState(() {
       if (_displayText.isNotEmpty && _displayText != "0") {
-        _displayText = _displayText.substring(0, _displayText.length - 1);
-        if (_displayText.isEmpty || _displayText == "-") {
+        // لو بنمسح كلمة علمية زي sin( نمسحها كلها مش حرف حرف
+        if (_displayText.endsWith("sin(") || _displayText.endsWith("cos(") || _displayText.endsWith("tan(") || _displayText.endsWith("log(")) {
+          _displayText = _displayText.substring(0, _displayText.length - 4);
+        } else if (_displayText.endsWith("ln(")) {
+          _displayText = _displayText.substring(0, _displayText.length - 3);
+        } else if (_displayText.endsWith("√( ")) {
+          _displayText = _displayText.substring(0, _displayText.length - 3);
+        } else {
+          _displayText = _displayText.substring(0, _displayText.length - 1);
+        }
+        
+        if (_displayText.isEmpty) {
           _displayText = "0";
         }
       }
     });
   }
 
-  // --- Basic Math Evaluator (No External Libraries) ---
+  // --- المفسر الرياضي الذكي لحساب الدوال العلمية بدون مكاتب خارجية ---
   void _onEqualPressed() {
     setState(() {
       try {
-        String expression = _displayText.replaceAll('×', '*').replaceAll('÷', '/');
+        _historyText = _displayText + " =";
+        String expression = _displayText
+            .replaceAll('×', '*')
+            .replaceAll('÷', '/')
+            .replaceAll('π', math.pi.toString())
+            .replaceAll('e', math.e.toString());
+
+        double result = _evaluateExpression(expression);
         
-        // Simple logic to calculate Basic operations between two numbers
-        RegExp regex = RegExp(r'([\-0-9.]+)([\+\-\*\/])([0-9.]+)');
-        var match = regex.firstMatch(expression);
-        
-        if (match != null) {
-          double num1 = double.parse(match.group(1)!);
-          String op = match.group(2)!;
-          double num2 = double.parse(match.group(3)!);
-          double res = 0;
-          
-          if (op == '+') res = num1 + num2;
-          if (op == '-') res = num1 - num2;
-          if (op == '*') res = num1 * num2;
-          if (op == '/') res = num1 / num2;
-          
-          _historyText = _displayText + " =";
-          // Remove .0 if it's an integer
-          _displayText = res.toString().replaceAll(RegExp(r'\.0$'), ''); 
-        } else {
-          // If the operation is too complex for basic regex or scientific
-          _historyText = "Basic Ops Only";
+        // تحويل الناتج لنص تنظيف الكسر الزائد لو كان عدد صحيح
+        _displayText = result.toString().replaceAll(RegExp(r'\.0$'), '');
+        if (_displayText == "NaN" || _displayText == "Infinity") {
+          _displayText = "Error";
         }
       } catch (e) {
         _displayText = "Error";
@@ -120,10 +130,91 @@ class _CalculatorHomeState extends State<CalculatorHome> {
     });
   }
 
-  void _onSciPressed(String text) {
-    setState(() {
-      _onInputPressed(text + "(");
-    });
+  double _evaluateExpression(String expr) {
+    // 1. معالجة الأقواس أولاً بشكل متداخل التكرار
+    while (expr.contains('(')) {
+      int startIndex = expr.lastIndexOf('(');
+      int endIndex = expr.indexOf(')', startIndex);
+      if (endIndex == -1) endIndex = expr.length;
+
+      String subExpr = expr.substring(startIndex + 1, endIndex);
+      double subResult = _evaluateSimple(subExpr);
+
+      // التحقق مما إذا كانت هناك دالة تسبق القوس مباشرة
+      String beforeBracket = expr.substring(0, startIndex);
+      if (beforeBracket.endsWith('sin')) {
+        expr = beforeBracket.substring(0, beforeBracket.length - 3) + math.sin(subResult * math.pi / 180).toString() + expr.substring(endIndex + 1);
+      } else if (beforeBracket.endsWith('cos')) {
+        expr = beforeBracket.substring(0, beforeBracket.length - 3) + math.cos(subResult * math.pi / 180).toString() + expr.substring(endIndex + 1);
+      } else if (beforeBracket.endsWith('tan')) {
+        expr = beforeBracket.substring(0, beforeBracket.length - 3) + math.tan(subResult * math.pi / 180).toString() + expr.substring(endIndex + 1);
+      } else if (beforeBracket.endsWith('log')) {
+        expr = beforeBracket.substring(0, beforeBracket.length - 3) + (math.log(subResult) / math.ln10).toString() + expr.substring(endIndex + 1);
+      } else if (beforeBracket.endsWith('ln')) {
+        expr = beforeBracket.substring(0, beforeBracket.length - 2) + math.log(subResult).toString() + expr.substring(endIndex + 1);
+      } else if (beforeBracket.endsWith('√')) {
+        expr = beforeBracket.substring(0, beforeBracket.length - 1) + math.sqrt(subResult).toString() + expr.substring(endIndex + 1);
+      } else {
+        expr = expr.substring(0, startIndex) + subResult.toString() + expr.substring(endIndex + 1);
+      }
+    }
+    return _evaluateSimple(expr);
+  }
+
+  double _evaluateSimple(String expr) {
+    // معالجة الأسس المباشرة ²
+    while (expr.contains('²')) {
+      int idx = expr.indexOf('²');
+      int start = idx - 1;
+      while (start >= 0 && (RegExp(r'[0-9.]').hasMatch(expr[start]))) {
+        start--;
+      }
+      start++;
+      double num = double.parse(expr.substring(start, idx));
+      expr = expr.substring(0, start) + (num * num).toString() + expr.substring(idx + 1);
+    }
+
+    // تقسيم الحسابات الأساسية بناءً على الأولويات (+, -, *, /)
+    List<String> tokens = [];
+    String numberBuffer = "";
+    
+    for (int i = 0; i < expr.length; i++) {
+      String char = expr[i];
+      if (RegExp(r'[0-9.]').hasMatch(char) || (char == '-' && (i == 0 || ['+', '-', '*', '/'].contains(expr[i - 1])))) {
+        numberBuffer += char;
+      } else {
+        if (numberBuffer.isNotEmpty) {
+          tokens.add(numberBuffer);
+          numberBuffer = "";
+        }
+        tokens.add(char);
+      }
+    }
+    if (numberBuffer.isNotEmpty) tokens.add(numberBuffer);
+
+    // حساب الضرب والقسمة أولاً
+    for (int i = 0; i < tokens.length; i++) {
+      if (tokens[i] == '*' || tokens[i] == '/') {
+        double val1 = double.parse(tokens[i - 1]);
+        double val2 = double.parse(tokens[i + 1]);
+        double res = tokens[i] == '*' ? val1 * val2 : val1 / val2;
+        tokens[i - 1] = res.toString();
+        tokens.removeAt(i);
+        tokens.removeAt(i);
+        i--;
+      }
+    }
+
+    // حساب الجمع والطرح ثانياً
+    double finalResult = tokens.isNotEmpty ? double.parse(tokens[0]) : 0;
+    for (int i = 1; i < tokens.length; i += 2) {
+      String op = tokens[i];
+      double val = double.parse(tokens[i + 1]);
+      if (op == '+') finalResult += val;
+      if (op == '-') finalResult -= val;
+    }
+
+    return finalResult;
   }
 
   @override
@@ -131,7 +222,6 @@ class _CalculatorHomeState extends State<CalculatorHome> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          // تم زيادة الحواف الجانبية هنا عشان متكونش لازقة في الشاشة
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 15.0),
           child: Column(
             children: [
@@ -203,6 +293,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
             overflow: TextOverflow.ellipsis,
           ),
           const Spacer(),
+          // الشاشة دلوقتي تدعم التحريك والتدحرج بالصابع أفقيًا بالكامل وبسلاسة
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -210,6 +301,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   reverse: true,
+                  physics: const BouncingScrollPhysics(), 
                   child: Text(
                     _displayText,
                     style: const TextStyle(
@@ -240,48 +332,49 @@ class _CalculatorHomeState extends State<CalculatorHome> {
   Widget _buildKeypad() {
     return Column(
       children: [
+        // تم مسح كرة التحكم وتوسيع أزرار التحكم الفوقية لراحة اليد
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildSmallControlBtn('SHIFT', Colors.yellow),
-            _buildSmallControlBtn('ALPHA', Colors.pinkAccent),
-            _buildDPadArrows(),
-            _buildSmallControlBtn('MODE SETUP', Colors.white, largeText: true),
+            _buildTopControlBtn('SHIFT', Colors.yellow),
+            _buildTopControlBtn('ALPHA', Colors.pinkAccent),
+            _buildTopControlBtn('MODE SETUP', Colors.white),
           ],
         ),
-        const SizedBox(height: 15),
+        const SizedBox(height: 20),
+        
         _buildSciRow4([
-          _buildSciBtn('CALC', topL: 'SOLVE =', topLCol: Colors.yellow, topR: 'd/dx', topRCol: Colors.yellow),
-          _buildSciBtn('∫□', topL: ':', topLCol: Colors.pinkAccent),
-          _buildSciBtn('x⁻¹', topL: 'x!', topLCol: Colors.yellow),
-          _buildSciBtn('log₍₎', topL: 'Σ', topLCol: Colors.yellow),
+          _buildSciBtn('CALC', topL: 'SOLVE =', topLCol: Colors.yellow, topR: 'd/dx', topRCol: Colors.yellow, action: () => _onInputPressed("")),
+          _buildSciBtn('∫□', topL: ':', topLCol: Colors.pinkAccent, action: () => _onInputPressed("")),
+          _buildSciBtn('x⁻¹', topL: 'x!', topLCol: Colors.yellow, action: () => _onInputPressed("")),
+          _buildSciBtn('log₍₎', topL: 'Σ', topLCol: Colors.yellow, action: () => _onInputPressed("log(")),
         ]),
         const SizedBox(height: 12),
         _buildSciRow6([
-          _buildSciBtn('■/□', topL: 'a b/c', topLCol: Colors.yellow),
-          _buildSciBtn('√■', topL: '³√', topLCol: Colors.yellow),
-          _buildSciBtn('x²', topL: 'x³', topLCol: Colors.yellow, topR: 'DEC', topRCol: Colors.cyan),
-          _buildSciBtn('x■', topL: 'ˣ√■', topLCol: Colors.yellow, topR: 'HEX', topRCol: Colors.cyan),
-          _buildSciBtn('log', topL: '10ˣ', topLCol: Colors.yellow, topR: 'BIN', topRCol: Colors.cyan),
-          _buildSciBtn('ln', topL: 'eˣ', topLCol: Colors.yellow, topR: 'OCT', topRCol: Colors.cyan),
+          _buildSciBtn('■/□', topL: 'a b/c', topLCol: Colors.yellow, action: () => _onInputPressed("")),
+          _buildSciBtn('√■', topL: '³√', topLCol: Colors.yellow, action: () => _onInputPressed("√(")),
+          _buildSciBtn('x²', topL: 'x³', topLCol: Colors.yellow, topR: 'DEC', topRCol: Colors.cyan, action: () => _onInputPressed("²")),
+          _buildSciBtn('x■', topL: 'ˣ√■', topLCol: Colors.yellow, topR: 'HEX', topRCol: Colors.cyan, action: () => _onInputPressed("")),
+          _buildSciBtn('log', topL: '10ˣ', topLCol: Colors.yellow, topR: 'BIN', topRCol: Colors.cyan, action: () => _onInputPressed("log(")),
+          _buildSciBtn('ln', topL: 'eˣ', topLCol: Colors.yellow, topR: 'OCT', topRCol: Colors.cyan, action: () => _onInputPressed("ln(")),
         ]),
         const SizedBox(height: 12),
         _buildSciRow6([
-          _buildSciBtn('(-)', topL: '∠', topLCol: Colors.yellow, topR: 'A', topRCol: Colors.pinkAccent),
-          _buildSciBtn('°\'\"', topL: '←', topLCol: Colors.yellow, topR: 'B', topRCol: Colors.pinkAccent),
-          _buildSciBtn('hyp', topL: 'Abs', topLCol: Colors.yellow, topR: 'C', topRCol: Colors.pinkAccent),
-          _buildSciBtn('sin', topL: 'sin⁻¹', topLCol: Colors.yellow, topR: 'D', topRCol: Colors.pinkAccent),
-          _buildSciBtn('cos', topL: 'cos⁻¹', topLCol: Colors.yellow, topR: 'E', topRCol: Colors.pinkAccent),
-          _buildSciBtn('tan', topL: 'tan⁻¹', topLCol: Colors.yellow, topR: 'F', topRCol: Colors.pinkAccent),
+          _buildSciBtn('(-)', topL: '∠', topLCol: Colors.yellow, topR: 'A', topRCol: Colors.pinkAccent, action: () => _onInputPressed("-")),
+          _buildSciBtn('°\'\"', topL: '←', topLCol: Colors.yellow, topR: 'B', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
+          _buildSciBtn('hyp', topL: 'Abs', topLCol: Colors.yellow, topR: 'C', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
+          _buildSciBtn('sin', topL: 'sin⁻¹', topLCol: Colors.yellow, topR: 'D', topRCol: Colors.pinkAccent, action: () => _onInputPressed("sin(")),
+          _buildSciBtn('cos', topL: 'cos⁻¹', topLCol: Colors.yellow, topR: 'E', topRCol: Colors.pinkAccent, action: () => _onInputPressed("cos(")),
+          _buildSciBtn('tan', topL: 'tan⁻¹', topLCol: Colors.yellow, topR: 'F', topRCol: Colors.pinkAccent, action: () => _onInputPressed("tan(")),
         ]),
         const SizedBox(height: 12),
         _buildSciRow6([
-          _buildSciBtn('RCL', topL: 'STO', topLCol: Colors.yellow),
-          _buildSciBtn('ENG', topL: '←', topLCol: Colors.yellow, topR: 'i', topRCol: Colors.pinkAccent),
-          _buildSciBtn('(', topL: '%', topLCol: Colors.yellow),
-          _buildSciBtn(')', topL: ',', topLCol: Colors.yellow, topR: 'X', topRCol: Colors.pinkAccent),
-          _buildSciBtn('S⇔D', topL: 'a b/c ⇔ d/c', topLCol: Colors.yellow, topR: 'Y', topRCol: Colors.pinkAccent),
-          _buildSciBtn('M+', topL: 'M-', topLCol: Colors.yellow, topR: 'M', topRCol: Colors.pinkAccent),
+          _buildSciBtn('RCL', topL: 'STO', topLCol: Colors.yellow, action: () => _onInputPressed("")),
+          _buildSciBtn('ENG', topL: '←', topLCol: Colors.yellow, topR: 'i', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
+          _buildSciBtn('(', topL: '%', topLCol: Colors.yellow, action: () => _onInputPressed("(")),
+          _buildSciBtn(')', topL: ',', topLCol: Colors.yellow, topR: 'X', topRCol: Colors.pinkAccent, action: () => _onInputPressed(")")),
+          _buildSciBtn('S⇔D', topL: 'a b/c ⇔ d/c', topLCol: Colors.yellow, topR: 'Y', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
+          _buildSciBtn('M+', topL: 'M-', topLCol: Colors.yellow, topR: 'M', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
         ]),
         const SizedBox(height: 18),
         Expanded(
@@ -299,63 +392,21 @@ class _CalculatorHomeState extends State<CalculatorHome> {
     );
   }
 
-  Widget _buildSmallControlBtn(String topText, Color topColor, {bool largeText = false}) {
+  Widget _buildTopControlBtn(String text, Color textColor) {
     return Column(
       children: [
-        Text(topText, style: TextStyle(color: topColor, fontSize: largeText ? 9 : 8, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 5),
+        Text(text, style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
         Container(
-          width: 32,
-          height: 22,
+          width: 70,
+          height: 30,
           decoration: BoxDecoration(
             color: const Color(0xFF222222),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.white12, width: 1),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildDPadArrows() {
-    return Container(
-      width: 90,
-      height: 90,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white12, width: 2),
-        color: const Color(0xFF151515), 
-      ),
-      child: Stack(
-        children: [
-          Align(
-              alignment: Alignment.topCenter,
-              child: _buildDPadArrowPlaceholder('^')),
-          Align(
-              alignment: Alignment.bottomCenter,
-              child: _buildDPadArrowPlaceholder('v')),
-          Align(
-              alignment: Alignment.centerLeft,
-              child: _buildDPadArrowPlaceholder('<')),
-          Align(
-              alignment: Alignment.centerRight,
-              child: _buildDPadArrowPlaceholder('>')),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDPadArrowPlaceholder(String text) {
-    return InkWell(
-      onTap: () {}, 
-      child: Container(
-        width: 30,
-        height: 30,
-        color: Colors.transparent, 
-        child: Center(
-            child: Text(text,
-                style: const TextStyle(color: Colors.white38, fontSize: 16))),
-      ),
     );
   }
 
@@ -373,11 +424,10 @@ class _CalculatorHomeState extends State<CalculatorHome> {
     );
   }
 
-  // تم تصغير عرض الزراير هنا عشان تتناسب مع البادينج الجديد
-  Widget _buildSciBtn(String text,
-      {String? topL, Color? topLCol, String? topR, Color? topRCol}) {
+  Widget _buildSciBtn(String text, {String? topL, Color? topLCol, String? topR, Color? topRCol, required VoidCallback action}) {
     return InkWell(
-      onTap: () => _onSciPressed(text),
+      onTap: action,
+      borderRadius: BorderRadius.circular(15),
       child: Column(
         children: [
           Row(
@@ -411,9 +461,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
     );
   }
 
-  // تم تصغير عرض زراير الأرقام هنا عشان تتناسب مع البادينج الجديد
-  Widget _buildNumRow(List<String> texts,
-      {List<String>? topLabels, bool numpds = false}) {
+  Widget _buildNumRow(List<String> texts, {List<String>? topLabels, bool numpds = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: List.generate(texts.length, (index) {
@@ -445,6 +493,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
                   _onInputPressed(text);
                 }
               },
+              borderRadius: BorderRadius.circular(25),
               child: Container(
                 width: 55,
                 height: 48,
@@ -468,9 +517,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
                       fontSize: numpds && !isSpecial ? 22 : 16,
                       fontWeight:
                           isSpecial ? FontWeight.w200 : FontWeight.w400,
-                      fontFamily: numpds && !isSpecial
-                          ? 'Arial'
-                          : 'Courier', 
+                      fontFamily: numpds && !isSpecial ? 'Arial' : 'Courier', 
                     ),
                   ),
                 ),
