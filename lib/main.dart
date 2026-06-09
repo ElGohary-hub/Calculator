@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'dart:math' as math;
 
 void main() {
@@ -31,90 +30,123 @@ class CalculatorBody extends StatefulWidget {
 }
 
 class _CalculatorBodyState extends State<CalculatorBody> {
-  String _displayText = "0"; 
-  String _historyText = ""; 
-  bool _shouldShowCursor = true; 
-  Timer? _cursorTimer; 
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  String _historyText = "";
 
   @override
   void initState() {
     super.initState();
-    _startCursorBlink();
-  }
-
-  @override
-  void dispose() {
-    _cursorTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startCursorBlink() {
-    _cursorTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
-      if (mounted) {
-        setState(() {
-          _shouldShowCursor = !_shouldShowCursor;
-        });
+    _controller.text = "";
+    // إجبار المؤشر يفضل شغال حتى بعد الضغط على الزراير
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        FocusScope.of(context).requestFocus(_focusNode);
       }
     });
   }
 
-  // --- إدخال البيانات للشاشة ---
-  void _onInputPressed(String input) {
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  // --- دالة إدخال النص في مكان المؤشر (للتعديل باللمس) ---
+  void _insertText(String text) {
+    int cursorPosition = _controller.selection.baseOffset;
+    if (cursorPosition < 0) {
+      cursorPosition = _controller.text.length;
+    }
+
+    String currentText = _controller.text;
+    String newText = currentText.substring(0, cursorPosition) + text + currentText.substring(cursorPosition);
+
     setState(() {
-      if (_displayText == "0" && !['+', '-', '×', '÷', '.', ')', '²'].contains(input)) {
-        _displayText = input;
-      } else {
-        _displayText += input;
-      }
+      _controller.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: cursorPosition + text.length),
+      );
     });
   }
 
   void _onACPressed() {
     setState(() {
-      _displayText = "0";
+      _controller.text = "";
       _historyText = "";
     });
   }
 
   void _onDELPressed() {
-    setState(() {
-      if (_displayText.isNotEmpty && _displayText != "0") {
-        if (_displayText.endsWith("sin(") || _displayText.endsWith("cos(") || _displayText.endsWith("tan(") || _displayText.endsWith("log(")) {
-          _displayText = _displayText.substring(0, _displayText.length - 4);
-        } else if (_displayText.endsWith("ln(")) {
-          _displayText = _displayText.substring(0, _displayText.length - 3);
-        } else if (_displayText.endsWith("√( ")) {
-          _displayText = _displayText.substring(0, _displayText.length - 3);
-        } else {
-          _displayText = _displayText.substring(0, _displayText.length - 1);
-        }
-        
-        if (_displayText.isEmpty) {
-          _displayText = "0";
-        }
+    int cursorPosition = _controller.selection.baseOffset;
+    if (cursorPosition > 0) {
+      String currentText = _controller.text;
+      
+      // مسح كلمة كاملة لو المؤشر بعدها
+      int deleteLength = 1;
+      if (cursorPosition >= 4 && (currentText.substring(0, cursorPosition).endsWith("sin(") || 
+                                  currentText.substring(0, cursorPosition).endsWith("cos(") || 
+                                  currentText.substring(0, cursorPosition).endsWith("tan(") || 
+                                  currentText.substring(0, cursorPosition).endsWith("log("))) {
+        deleteLength = 4;
+      } else if (cursorPosition >= 3 && currentText.substring(0, cursorPosition).endsWith("ln(")) {
+        deleteLength = 3;
+      } else if (cursorPosition >= 2 && currentText.substring(0, cursorPosition).endsWith("√(")) {
+        deleteLength = 2;
       }
-    });
+
+      String newText = currentText.substring(0, cursorPosition - deleteLength) + currentText.substring(cursorPosition);
+      
+      setState(() {
+        _controller.value = TextEditingValue(
+          text: newText,
+          selection: TextSelection.collapsed(offset: cursorPosition - deleteLength),
+        );
+      });
+    }
   }
 
-  // --- المفسر الرياضي الذكي ---
+  // --- المُفسر الرياضي الذكي (مُحسن لترتيب العمليات والأقواس) ---
   void _onEqualPressed() {
     setState(() {
       try {
-        _historyText = _displayText + " =";
-        String expression = _displayText
-            .replaceAll('×', '*')
-            .replaceAll('÷', '/')
-            .replaceAll('π', math.pi.toString())
-            .replaceAll('e', math.e.toString());
+        String expression = _controller.text;
+        if (expression.isEmpty) return;
+
+        _historyText = expression + " =";
+        
+        // تجهيز المعادلة للرياضيات
+        expression = expression.replaceAll('×', '*').replaceAll('÷', '/').replaceAll('π', math.pi.toString()).replaceAll('e', math.e.toString());
+        
+        // إضافة علامة الضرب تلقائياً لو فيه رقم وراه قوس (مثال: 2(3) -> 2*(3))
+        expression = expression.replaceAllMapped(RegExp(r'([0-9])\('), (m) => '${m[1]}*(');
+        expression = expression.replaceAllMapped(RegExp(r'\)([0-9])'), (m) => ')*${m[1]}');
+        expression = expression.replaceAllMapped(RegExp(r'([0-9])(sin|cos|tan|log|ln|√)'), (m) => '${m[1]}*${m[2]}');
+
+        // إغلاق أي أقواس مفتوحة نسيها المستخدم
+        int openBrackets = expression.split('(').length - 1;
+        int closeBrackets = expression.split(')').length - 1;
+        while (openBrackets > closeBrackets) {
+          expression += ')';
+          closeBrackets++;
+        }
 
         double result = _evaluateExpression(expression);
         
-        _displayText = result.toString().replaceAll(RegExp(r'\.0$'), '');
-        if (_displayText == "NaN" || _displayText == "Infinity") {
-          _displayText = "Error";
+        String finalRes = result.toString();
+        if (finalRes.endsWith('.0')) {
+          finalRes = finalRes.substring(0, finalRes.length - 2);
+        }
+        
+        if (finalRes == "NaN" || finalRes == "Infinity") {
+          _controller.text = "Error";
+        } else {
+          _controller.text = finalRes;
+          _controller.selection = TextSelection.collapsed(offset: finalRes.length);
         }
       } catch (e) {
-        _displayText = "Error";
+        _controller.text = "Error";
       }
     });
   }
@@ -149,6 +181,7 @@ class _CalculatorBodyState extends State<CalculatorBody> {
   }
 
   double _evaluateSimple(String expr) {
+    // معالجة علامة التربيع المباشرة
     while (expr.contains('²')) {
       int idx = expr.indexOf('²');
       int start = idx - 1;
@@ -165,7 +198,8 @@ class _CalculatorBodyState extends State<CalculatorBody> {
     
     for (int i = 0; i < expr.length; i++) {
       String char = expr[i];
-      if (RegExp(r'[0-9.]').hasMatch(char) || (char == '-' && (i == 0 || ['+', '-', '*', '/'].contains(expr[i - 1])))) {
+      // السماح بالسالب في أول الرقم
+      if (RegExp(r'[0-9.]').hasMatch(char) || (char == '-' && (i == 0 || ['+', '-', '*', '/', '^'].contains(expr[i - 1])))) {
         numberBuffer += char;
       } else {
         if (numberBuffer.isNotEmpty) {
@@ -177,6 +211,19 @@ class _CalculatorBodyState extends State<CalculatorBody> {
     }
     if (numberBuffer.isNotEmpty) tokens.add(numberBuffer);
 
+    // حساب الأسس (^)
+    for (int i = tokens.length - 1; i >= 0; i--) {
+      if (tokens[i] == '^') {
+        double val1 = double.parse(tokens[i - 1]);
+        double val2 = double.parse(tokens[i + 1]);
+        double res = math.pow(val1, val2).toDouble();
+        tokens[i - 1] = res.toString();
+        tokens.removeAt(i);
+        tokens.removeAt(i);
+      }
+    }
+
+    // حساب الضرب والقسمة
     for (int i = 0; i < tokens.length; i++) {
       if (tokens[i] == '*' || tokens[i] == '/') {
         double val1 = double.parse(tokens[i - 1]);
@@ -189,6 +236,7 @@ class _CalculatorBodyState extends State<CalculatorBody> {
       }
     }
 
+    // حساب الجمع والطرح
     double finalResult = tokens.isNotEmpty ? double.parse(tokens[0]) : 0;
     for (int i = 1; i < tokens.length; i += 2) {
       String op = tokens[i];
@@ -276,35 +324,24 @@ class _CalculatorBodyState extends State<CalculatorBody> {
             overflow: TextOverflow.ellipsis,
           ),
           const Spacer(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  reverse: true,
-                  physics: const BouncingScrollPhysics(), 
-                  child: Text(
-                    _displayText,
-                    style: const TextStyle(
-                      color: Colors.red, 
-                      fontSize: 48,
-                      fontWeight: FontWeight.w100,
-                      fontFamily: 'CourierNew', 
-                    ),
-                    maxLines: 1,
-                  ),
-                ),
-              ),
-              Opacity(
-                opacity: _shouldShowCursor ? 1 : 0,
-                child: Container(
-                  width: 3,
-                  height: 48,
-                  color: Colors.red,
-                ),
-              ),
-            ],
+          // هنا السحر: TextField حقيقي بيتيحلك تلمس، تنقل المؤشر، وتمسح أي مكان!
+          TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            readOnly: true, // يمنع ظهور كيبورد الموبايل
+            showCursor: true, // يظهر المؤشر عشان تعرف بتعدل فين
+            autofocus: true,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: Colors.red,
+              fontSize: 48,
+              fontWeight: FontWeight.w100,
+              fontFamily: 'CourierNew',
+            ),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
           ),
         ],
       ),
@@ -324,38 +361,39 @@ class _CalculatorBodyState extends State<CalculatorBody> {
         ),
         const SizedBox(height: 20),
         
+        // تم ربط كل الزراير بوظائف حقيقية
         _buildSciRow4([
-          _buildSciBtn('CALC', topL: 'SOLVE =', topLCol: Colors.yellow, topR: 'd/dx', topRCol: Colors.yellow, action: () => _onInputPressed("")),
-          _buildSciBtn('∫□', topL: ':', topLCol: Colors.pinkAccent, action: () => _onInputPressed("")),
-          _buildSciBtn('x⁻¹', topL: 'x!', topLCol: Colors.yellow, action: () => _onInputPressed("")),
-          _buildSciBtn('log₍₎', topL: 'Σ', topLCol: Colors.yellow, action: () => _onInputPressed("log(")),
+          _buildSciBtn('CALC', topL: 'SOLVE =', topLCol: Colors.yellow, topR: 'd/dx', topRCol: Colors.yellow, action: () {}),
+          _buildSciBtn('∫□', topL: ':', topLCol: Colors.pinkAccent, action: () {}),
+          _buildSciBtn('x⁻¹', topL: 'x!', topLCol: Colors.yellow, action: () => _insertText("^-1")),
+          _buildSciBtn('log₍₎', topL: 'Σ', topLCol: Colors.yellow, action: () => _insertText("log(")),
         ]),
         const SizedBox(height: 12),
         _buildSciRow6([
-          _buildSciBtn('■/□', topL: 'a b/c', topLCol: Colors.yellow, action: () => _onInputPressed("")),
-          _buildSciBtn('√■', topL: '³√', topLCol: Colors.yellow, action: () => _onInputPressed("√(")),
-          _buildSciBtn('x²', topL: 'x³', topLCol: Colors.yellow, topR: 'DEC', topRCol: Colors.cyan, action: () => _onInputPressed("²")),
-          _buildSciBtn('x■', topL: 'ˣ√■', topLCol: Colors.yellow, topR: 'HEX', topRCol: Colors.cyan, action: () => _onInputPressed("")),
-          _buildSciBtn('log', topL: '10ˣ', topLCol: Colors.yellow, topR: 'BIN', topRCol: Colors.cyan, action: () => _onInputPressed("log(")),
-          _buildSciBtn('ln', topL: 'eˣ', topLCol: Colors.yellow, topR: 'OCT', topRCol: Colors.cyan, action: () => _onInputPressed("ln(")),
+          _buildSciBtn('■/□', topL: 'a b/c', topLCol: Colors.yellow, action: () => _insertText("/")),
+          _buildSciBtn('√■', topL: '³√', topLCol: Colors.yellow, action: () => _insertText("√(")),
+          _buildSciBtn('x²', topL: 'x³', topLCol: Colors.yellow, topR: 'DEC', topRCol: Colors.cyan, action: () => _insertText("²")),
+          _buildSciBtn('x■', topL: 'ˣ√■', topLCol: Colors.yellow, topR: 'HEX', topRCol: Colors.cyan, action: () => _insertText("^")),
+          _buildSciBtn('log', topL: '10ˣ', topLCol: Colors.yellow, topR: 'BIN', topRCol: Colors.cyan, action: () => _insertText("log(")),
+          _buildSciBtn('ln', topL: 'eˣ', topLCol: Colors.yellow, topR: 'OCT', topRCol: Colors.cyan, action: () => _insertText("ln(")),
         ]),
         const SizedBox(height: 12),
         _buildSciRow6([
-          _buildSciBtn('(-)', topL: '∠', topLCol: Colors.yellow, topR: 'A', topRCol: Colors.pinkAccent, action: () => _onInputPressed("-")),
-          _buildSciBtn('°\'\"', topL: '←', topLCol: Colors.yellow, topR: 'B', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
-          _buildSciBtn('hyp', topL: 'Abs', topLCol: Colors.yellow, topR: 'C', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
-          _buildSciBtn('sin', topL: 'sin⁻¹', topLCol: Colors.yellow, topR: 'D', topRCol: Colors.pinkAccent, action: () => _onInputPressed("sin(")),
-          _buildSciBtn('cos', topL: 'cos⁻¹', topLCol: Colors.yellow, topR: 'E', topRCol: Colors.pinkAccent, action: () => _onInputPressed("cos(")),
-          _buildSciBtn('tan', topL: 'tan⁻¹', topLCol: Colors.yellow, topR: 'F', topRCol: Colors.pinkAccent, action: () => _onInputPressed("tan(")),
+          _buildSciBtn('(-)', topL: '∠', topLCol: Colors.yellow, topR: 'A', topRCol: Colors.pinkAccent, action: () => _insertText("-")),
+          _buildSciBtn('°\'\"', topL: '←', topLCol: Colors.yellow, topR: 'B', topRCol: Colors.pinkAccent, action: () {}),
+          _buildSciBtn('hyp', topL: 'Abs', topLCol: Colors.yellow, topR: 'C', topRCol: Colors.pinkAccent, action: () {}),
+          _buildSciBtn('sin', topL: 'sin⁻¹', topLCol: Colors.yellow, topR: 'D', topRCol: Colors.pinkAccent, action: () => _insertText("sin(")),
+          _buildSciBtn('cos', topL: 'cos⁻¹', topLCol: Colors.yellow, topR: 'E', topRCol: Colors.pinkAccent, action: () => _insertText("cos(")),
+          _buildSciBtn('tan', topL: 'tan⁻¹', topLCol: Colors.yellow, topR: 'F', topRCol: Colors.pinkAccent, action: () => _insertText("tan(")),
         ]),
         const SizedBox(height: 12),
         _buildSciRow6([
-          _buildSciBtn('RCL', topL: 'STO', topLCol: Colors.yellow, action: () => _onInputPressed("")),
-          _buildSciBtn('ENG', topL: '←', topLCol: Colors.yellow, topR: 'i', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
-          _buildSciBtn('(', topL: '%', topLCol: Colors.yellow, action: () => _onInputPressed("(")),
-          _buildSciBtn(')', topL: ',', topLCol: Colors.yellow, topR: 'X', topRCol: Colors.pinkAccent, action: () => _onInputPressed(")")),
-          _buildSciBtn('S⇔D', topL: 'a b/c ⇔ d/c', topLCol: Colors.yellow, topR: 'Y', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
-          _buildSciBtn('M+', topL: 'M-', topLCol: Colors.yellow, topR: 'M', topRCol: Colors.pinkAccent, action: () => _onInputPressed("")),
+          _buildSciBtn('RCL', topL: 'STO', topLCol: Colors.yellow, action: () {}),
+          _buildSciBtn('ENG', topL: '←', topLCol: Colors.yellow, topR: 'i', topRCol: Colors.pinkAccent, action: () {}),
+          _buildSciBtn('(', topL: '%', topLCol: Colors.yellow, action: () => _insertText("(")),
+          _buildSciBtn(')', topL: ',', topLCol: Colors.yellow, topR: 'X', topRCol: Colors.pinkAccent, action: () => _insertText(")")),
+          _buildSciBtn('S⇔D', topL: 'a b/c ⇔ d/c', topLCol: Colors.yellow, topR: 'Y', topRCol: Colors.pinkAccent, action: () {}),
+          _buildSciBtn('M+', topL: 'M-', topLCol: Colors.yellow, topR: 'M', topRCol: Colors.pinkAccent, action: () {}),
         ]),
         const SizedBox(height: 18),
         Expanded(
@@ -365,7 +403,7 @@ class _CalculatorBodyState extends State<CalculatorBody> {
               _buildNumRow(['7', '8', '9', 'DEL', 'AC'], topLabels: ['CONST', 'CONV', 'CLR', 'INS', 'OFF'], numpds: true),
               _buildNumRow(['4', '5', '6', '×', '÷'], topLabels: ['MATRIX', 'VECTOR', '', 'nPr', 'nCr'], numpds: true),
               _buildNumRow(['1', '2', '3', '+', '-'], topLabels: ['STAT', 'CMPLX', 'BASE', 'Pol', 'Rec'], numpds: true),
-              _buildNumRow(['0', '.', '×10ˣ', 'Ans', '='], topLabels: ['Rnd', 'Ran#', 'π', 'DRG', ''], numpds: true),
+              _buildNumRow(['0', '.', 'π', 'e', '='], topLabels: ['Rnd', 'Ran#', '', 'DRG', ''], numpds: true), // تم استبدال Ans و x10^ بـ الثوابت
             ],
           ),
         ),
@@ -471,7 +509,7 @@ class _CalculatorBodyState extends State<CalculatorBody> {
                 } else if (text == '=') {
                   _onEqualPressed();
                 } else {
-                  _onInputPressed(text);
+                  _insertText(text);
                 }
               },
               borderRadius: BorderRadius.circular(25),
@@ -510,3 +548,4 @@ class _CalculatorBodyState extends State<CalculatorBody> {
     );
   }
 }
+
