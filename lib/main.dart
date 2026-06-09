@@ -18,17 +18,8 @@ class ScientificCalculatorApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.black,
         brightness: Brightness.dark,
       ),
-      home: const CalculatorHome(),
+      home: const CalculatorBody(),
     );
-  }
-}
-
-class CalculatorHome extends StatefulWidget {
-  const CalculatorHome({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const CalculatorBody();
   }
 }
 
@@ -88,7 +79,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
   void _onDELPressed() {
     setState(() {
       if (_displayText.isNotEmpty && _displayText != "0") {
-        // لو بنمسح كلمة علمية زي sin( نمسحها كلها مش حرف حرف
         if (_displayText.endsWith("sin(") || _displayText.endsWith("cos(") || _displayText.endsWith("tan(") || _displayText.endsWith("log(")) {
           _displayText = _displayText.substring(0, _displayText.length - 4);
         } else if (_displayText.endsWith("ln(")) {
@@ -106,7 +96,7 @@ class _CalculatorBodyState extends State<CalculatorBody> {
     });
   }
 
-  // --- المفسر الرياضي الذكي لحساب الدوال العلمية بدون مكاتب خارجية ---
+  // --- المفسر الرياضي الذكي ---
   void _onEqualPressed() {
     setState(() {
       try {
@@ -119,7 +109,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
 
         double result = _evaluateExpression(expression);
         
-        // تحويل الناتج لنص تنظيف الكسر الزائد لو كان عدد صحيح
         _displayText = result.toString().replaceAll(RegExp(r'\.0$'), '');
         if (_displayText == "NaN" || _displayText == "Infinity") {
           _displayText = "Error";
@@ -131,7 +120,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
   }
 
   double _evaluateExpression(String expr) {
-    // 1. معالجة الأقواس أولاً بشكل متداخل التكرار
     while (expr.contains('(')) {
       int startIndex = expr.lastIndexOf('(');
       int endIndex = expr.indexOf(')', startIndex);
@@ -140,7 +128,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
       String subExpr = expr.substring(startIndex + 1, endIndex);
       double subResult = _evaluateSimple(subExpr);
 
-      // التحقق مما إذا كانت هناك دالة تسبق القوس مباشرة
       String beforeBracket = expr.substring(0, startIndex);
       if (beforeBracket.endsWith('sin')) {
         expr = beforeBracket.substring(0, beforeBracket.length - 3) + math.sin(subResult * math.pi / 180).toString() + expr.substring(endIndex + 1);
@@ -162,7 +149,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
   }
 
   double _evaluateSimple(String expr) {
-    // معالجة الأسس المباشرة ²
     while (expr.contains('²')) {
       int idx = expr.indexOf('²');
       int start = idx - 1;
@@ -174,7 +160,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
       expr = expr.substring(0, start) + (num * num).toString() + expr.substring(idx + 1);
     }
 
-    // تقسيم الحسابات الأساسية بناءً على الأولويات (+, -, *, /)
     List<String> tokens = [];
     String numberBuffer = "";
     
@@ -192,7 +177,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
     }
     if (numberBuffer.isNotEmpty) tokens.add(numberBuffer);
 
-    // حساب الضرب والقسمة أولاً
     for (int i = 0; i < tokens.length; i++) {
       if (tokens[i] == '*' || tokens[i] == '/') {
         double val1 = double.parse(tokens[i - 1]);
@@ -205,7 +189,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
       }
     }
 
-    // حساب الجمع والطرح ثانياً
     double finalResult = tokens.isNotEmpty ? double.parse(tokens[0]) : 0;
     for (int i = 1; i < tokens.length; i += 2) {
       String op = tokens[i];
@@ -293,7 +276,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
             overflow: TextOverflow.ellipsis,
           ),
           const Spacer(),
-          // الشاشة دلوقتي تدعم التحريك والتدحرج بالصابع أفقيًا بالكامل وبسلاسة
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -332,7 +314,6 @@ class _CalculatorBodyState extends State<CalculatorBody> {
   Widget _buildKeypad() {
     return Column(
       children: [
-        // تم مسح كرة التحكم وتوسيع أزرار التحكم الفوقية لراحة اليد
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
