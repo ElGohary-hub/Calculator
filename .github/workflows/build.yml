@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Flutter APK
 
 on:
   push:
@@ -9,37 +9,24 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Set up Java
+        uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
           channel: 'stable'
-
-      - name: Fix Missing Android Files
-        run: |
-          flutter create --project-name khatm temp_app
-          mv temp_app/android .
-          rm -rf temp_app
-
-      - name: Change App Name to Arabic
-        run: |
-          sed -i 's/android:label="khatm"/android:label="خاتم تسبيح"/g' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Generate App Icons
-        run: dart run flutter_launcher_icons
 
       - name: Build APK
         run: flutter build apk --release
@@ -47,5 +34,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Khatm-Tasbeeh-APK
+          name: Calculator-App
           path: build/app/outputs/flutter-apk/app-release.apk
