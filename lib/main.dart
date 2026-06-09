@@ -1,684 +1,285 @@
-import 'dart:async';
-import 'dart:convert'; 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]).then((_) {
-    runApp(const MyApp());
-  });
+  runApp(const ScientificCalculatorApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ScientificCalculatorApp extends StatelessWidget {
+  const ScientificCalculatorApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Scientific Calculator',
       debugShowCheckedModeBanner: false,
-      title: 'خاتم', 
-      theme: ThemeData(fontFamily: 'Cairo'),
-      builder: (context, child) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: child!,
-        );
-      },
-      home: const TasbeehScreen(),
-    );
-  }
-}
-
-class TasbeehScreen extends StatefulWidget {
-  const TasbeehScreen({super.key});
-
-  @override
-  _TasbeehScreenState createState() => _TasbeehScreenState();
-}
-
-class _TasbeehScreenState extends State<TasbeehScreen> with AutomaticKeepAliveClientMixin {
-  bool isFirstText = true;
-  Timer? _timer;
-
-  int mainCounter = 0;
-  int currentIndex = 0;
-  bool isDarkMode = true; 
-
-  Map<String, int> totalCounts = {};
-  Map<String, int> dailyCounts = {};
-  Map<String, int> monthlyCounts = {};
-  String lastDate = "";
-  String lastMonth = "";
-
-  List<Map<String, dynamic>> dhikrList = [
-    {"text": "استغفر الله العظيم", "target": 33},
-    {"text": "سبحان الله", "target": 33},
-    {"text": "سبحان الله وبحمده سبحان الله العظيم", "target": 33},
-    {"text": "الحمد لله", "target": 33},
-    {"text": "الله اكبر", "target": 33},
-    {"text": "الله اكبر ولله الحمد", "target": 33},
-    {"text": "اللهم صلِّ علي محمد وآل محمد", "target": 33},
-  ];
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    loadSavedData(); 
-    
-    _timer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      setState(() {
-        isFirstText = !isFirstText;
-      });
-    });
-  }
-
-  void _checkAndResetDates() {
-    DateTime now = DateTime.now();
-    String today = "${now.year}-${now.month}-${now.day}";
-    String thisMonth = "${now.year}-${now.month}";
-    bool changed = false;
-
-    if (lastDate != today) {
-      dailyCounts.clear();
-      lastDate = today;
-      changed = true;
-    }
-    if (lastMonth != thisMonth) {
-      monthlyCounts.clear();
-      lastMonth = thisMonth;
-      changed = true;
-    }
-    if (changed) saveData();
-  }
-
-  Future<void> loadSavedData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      mainCounter = prefs.getInt('counter') ?? 0;
-      currentIndex = prefs.getInt('index') ?? 0;
-      isDarkMode = prefs.getBool('isDarkMode') ?? true;
-      
-      totalCounts = Map<String, int>.from(jsonDecode(prefs.getString('totalCounts') ?? '{}'));
-      dailyCounts = Map<String, int>.from(jsonDecode(prefs.getString('dailyCounts') ?? '{}'));
-      monthlyCounts = Map<String, int>.from(jsonDecode(prefs.getString('monthlyCounts') ?? '{}'));
-      lastDate = prefs.getString('lastDate') ?? "";
-      lastMonth = prefs.getString('lastMonth') ?? "";
-      
-      _checkAndResetDates();
-
-      String? savedList = prefs.getString('dhikrList');
-      if (savedList != null) {
-        List<dynamic> decodedList = jsonDecode(savedList);
-        dhikrList = decodedList.map((item) => Map<String, dynamic>.from(item)).toList();
-      }
-    });
-  }
-
-  Future<void> saveData() async {
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setInt('counter', mainCounter);
-    prefs.setInt('index', currentIndex);
-    prefs.setBool('isDarkMode', isDarkMode);
-    prefs.setString('dhikrList', jsonEncode(dhikrList));
-    
-    prefs.setString('totalCounts', jsonEncode(totalCounts));
-    prefs.setString('dailyCounts', jsonEncode(dailyCounts));
-    prefs.setString('monthlyCounts', jsonEncode(monthlyCounts));
-    prefs.setString('lastDate', lastDate);
-    prefs.setString('lastMonth', lastMonth);
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void incrementCounter() {
-    HapticFeedback.lightImpact();
-    SystemSound.play(SystemSoundType.click); 
-
-    setState(() {
-      mainCounter++;
-      
-      _checkAndResetDates();
-      String text = dhikrList[currentIndex]["text"];
-      totalCounts[text] = (totalCounts[text] ?? 0) + 1;
-      dailyCounts[text] = (dailyCounts[text] ?? 0) + 1;
-      monthlyCounts[text] = (monthlyCounts[text] ?? 0) + 1;
-
-      if (mainCounter >= dhikrList[currentIndex]["target"]) {
-        currentIndex = (currentIndex + 1) % dhikrList.length;
-        mainCounter = 0; 
-        HapticFeedback.heavyImpact(); 
-      }
-      saveData(); 
-    });
-  }
-
-  void showTotalStats() {
-    Color boxColor = isDarkMode ? Colors.grey[900]! : Colors.white;
-    Color borderColor = isDarkMode ? Colors.white30 : Colors.black26;
-    Color textColor = isDarkMode ? Colors.white : Colors.black87;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: isDarkMode ? Colors.grey[900] : Colors.grey[200],
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text("الإحصائيات", style: TextStyle(color: textColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: dhikrList.length,
-              itemBuilder: (context, index) {
-                String text = dhikrList[index]["text"];
-                int daily = dailyCounts[text] ?? 0;
-                int monthly = monthlyCounts[text] ?? 0;
-                int total = totalCounts[text] ?? 0;
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 15),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-                  decoration: BoxDecoration(
-                    color: boxColor,
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: borderColor),
-                    boxShadow: [
-                      if (!isDarkMode) BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 5, spreadRadius: 1)
-                    ]
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(text, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("اليوم: $daily", style: const TextStyle(color: Colors.green, fontSize: 13, fontWeight: FontWeight.bold)),
-                          Text("الشهر: $monthly", style: const TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.bold)),
-                          Text("الكلي: $total", style: const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold)),
-                        ],
-                      )
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("إغلاق", style: TextStyle(color: Colors.grey)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void deleteDhikr(int index) {
-    if (dhikrList.length == 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("يجب ترك ذكر واحد على الأقل في القائمة.")),
-      );
-      return;
-    }
-
-    setState(() {
-      dhikrList.removeAt(index);
-      if (currentIndex >= dhikrList.length) {
-        currentIndex = 0;
-        mainCounter = 0;
-      } else if (currentIndex == index) {
-        mainCounter = 0;
-      }
-      saveData(); 
-    });
-    
-    Navigator.pop(context);
-    showDhikrMenu();
-  }
-
-  void addNewDhikr(BuildContext context) {
-    TextEditingController textController = TextEditingController();
-    TextEditingController targetController = TextEditingController(text: "33");
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-          title: Text("إضافة ذكر جديد", style: TextStyle(color: isDarkMode ? Colors.white : Colors.black)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: textController,
-                autofocus: true,
-                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-                decoration: InputDecoration(
-                  labelText: "اكتب الذكر هنا",
-                  labelStyle: const TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDarkMode ? Colors.white54 : Colors.black54)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDarkMode ? Colors.white : Colors.black)),
-                ),
-              ),
-              const SizedBox(height: 15),
-              TextField(
-                controller: targetController,
-                keyboardType: TextInputType.number,
-                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-                decoration: InputDecoration(
-                  labelText: "الرقم المستهدف (الهدف)",
-                  labelStyle: const TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDarkMode ? Colors.white54 : Colors.black54)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDarkMode ? Colors.white : Colors.black)),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("إلغاء", style: TextStyle(color: Colors.grey)),
-            ),
-            TextButton(
-              onPressed: () {
-                if (textController.text.trim().isNotEmpty) {
-                  setState(() {
-                    int target = int.tryParse(targetController.text) ?? 33;
-                    dhikrList.add({
-                      "text": textController.text.trim(),
-                      "target": target > 0 ? target : 33
-                    });
-                    saveData(); 
-                  });
-                  Navigator.pop(context); 
-                  Navigator.pop(context); 
-                  showDhikrMenu(); 
-                }
-              },
-              child: const Text("إضافة", style: TextStyle(color: Colors.green)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void editTarget(BuildContext context, int index) {
-    TextEditingController controller = TextEditingController(
-      text: dhikrList[index]["target"].toString(),
-    );
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-          title: Text("تعديل هدف (${dhikrList[index]['text']})", style: TextStyle(color: isDarkMode ? Colors.white : Colors.black, fontSize: 16)),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-            decoration: InputDecoration(
-              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDarkMode ? Colors.white54 : Colors.black54)),
-              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDarkMode ? Colors.white : Colors.black)),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("إلغاء", style: TextStyle(color: Colors.grey)),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  int newTarget = int.tryParse(controller.text) ?? 33;
-                  if (newTarget > 0) {
-                    dhikrList[index]["target"] = newTarget;
-                    saveData(); 
-                  }
-                });
-                Navigator.pop(context); 
-                Navigator.pop(context); 
-                showDhikrMenu(); 
-              },
-              child: const Text("حفظ", style: TextStyle(color: Colors.green)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void showDhikrMenu() {
-    Color boxColor = isDarkMode ? Colors.grey[900]! : Colors.white;
-    Color borderColor = isDarkMode ? Colors.white30 : Colors.black26;
-    Color textColor = isDarkMode ? Colors.white : Colors.black87;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDarkMode ? Colors.grey[900] : Colors.grey[200],
-      isScrollControlled: true, 
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      theme: ThemeData(
+        scaffoldBackgroundColor: Colors.black,
+        brightness: Brightness.dark,
       ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.65, 
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Stack(
-              children: [
-                Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    Container(
-                      width: 45,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[500],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    Text(
-                      "قائمة الأذكار",
-                      style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    const SizedBox(height: 10),
-                    Divider(color: isDarkMode ? Colors.white24 : Colors.black26, thickness: 1),
-                    
-                    Expanded(
-                      child: ListView.builder(
-                        controller: scrollController,
-                        padding: const EdgeInsets.only(top: 12, left: 12, right: 12, bottom: 80), 
-                        itemCount: dhikrList.length,
-                        itemBuilder: (context, index) {
-                          bool isSelected = index == currentIndex;
-                          return Container(
-                            margin: const EdgeInsets.symmetric(vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isSelected ? Colors.green.withOpacity(0.15) : boxColor,
-                              borderRadius: BorderRadius.circular(30),
-                              border: Border.all(color: borderColor),
-                              boxShadow: [
-                                if (!isDarkMode) BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 5, spreadRadius: 1)
-                              ]
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                dhikrList[index]["text"],
-                                style: TextStyle(
-                                  color: isSelected ? Colors.green[600] : (isDarkMode ? Colors.white : Colors.black), 
-                                  fontSize: 16,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
-                                ),
-                              ),
-                              subtitle: Text(
-                                "الرقم المستهدف: ${dhikrList[index]["target"]}",
-                                style: const TextStyle(color: Colors.grey, fontSize: 13),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.blueAccent, size: 22),
-                                    onPressed: () => editTarget(context, index),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.redAccent, size: 22),
-                                    onPressed: () => deleteDhikr(index),
-                                  ),
-                                ],
-                              ),
-                              onTap: () {
-                                setState(() {
-                                  currentIndex = index;
-                                  mainCounter = 0; 
-                                  saveData(); 
-                                });
-                                Navigator.pop(context);
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                Positioned(
-                  bottom: 20,
-                  right: 20,
-                  child: GestureDetector(
-                    onTap: () => addNewDhikr(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: boxColor,
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(color: borderColor),
-                        boxShadow: [
-                          if (!isDarkMode) BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 5, spreadRadius: 1)
-                        ]
-                      ),
-                      child: Icon(Icons.add, color: textColor, size: 30),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      home: const CalculatorHome(),
     );
   }
+}
+
+class CalculatorHome extends StatelessWidget {
+  const CalculatorHome({super.key});
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-
-    Color bgColor = isDarkMode ? Colors.black : Colors.grey[50]!;
-    Color textColor = isDarkMode ? Colors.white : Colors.black87;
-    Color boxColor = isDarkMode ? Colors.grey[900]! : Colors.white;
-    Color borderColor = isDarkMode ? Colors.white30 : Colors.black26;
-
     return Scaffold(
-      backgroundColor: bgColor, 
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 15),
-            
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      isDarkMode ? Icons.light_mode : Icons.dark_mode, 
-                      color: isDarkMode ? Colors.amber : Colors.indigo
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        isDarkMode = !isDarkMode;
-                        saveData(); 
-                      });
-                    },
-                  ),
-                  
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: boxColor,
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: borderColor),
-                      boxShadow: [
-                        if (!isDarkMode) BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 5, spreadRadius: 1)
-                      ]
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star, color: Colors.amber, size: 20),
-                        const SizedBox(width: 10),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 600), 
-                          transitionBuilder: (Widget child, Animation<double> animation) {
-                            return FadeTransition(opacity: animation, child: child);
-                          },
-                          child: Text(
-                            isFirstText ? "مَا نَقَصَ مَالٌ مِنْ صَدَقَةٍ" : "الصدقة جسر إلى الجَنَّةِ",
-                            key: ValueKey<bool>(isFirstText),
-                            style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 48), 
-                ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+          child: Column(
+            children: [
+              // 1. Top Zikr Banner
+              _buildTopBanner(),
+              const SizedBox(height: 15),
+
+              // 2. Display Screen with Red Border Effect
+              _buildDisplayScreen(),
+              const SizedBox(height: 20),
+
+              // 3. Calculator Keypad
+              Expanded(
+                child: _buildKeypad(),
               ),
-            ),
-
-            const SizedBox(height: 35),
-
-            // التعديل الأول: مستطيل بحواف دائرية للصورة زي الصورة المرفقة
-            Container(
-              height: 210,
-              width: MediaQuery.of(context).size.width * 0.85,
-              decoration: BoxDecoration(
-                color: Colors.transparent, 
-                border: Border.all(color: borderColor), 
-                borderRadius: BorderRadius.circular(20), 
-                boxShadow: [
-                  if (!isDarkMode) BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 5, spreadRadius: 1) 
-                ]
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(19), 
-                child: Image.asset(
-                  'gaza.png', 
-                  fit: BoxFit.cover, 
-                  errorBuilder: (context, error, stackTrace) {
-                     return Center(
-                       child: Icon(Icons.mosque, size: 80, color: isDarkMode ? Colors.white30 : Colors.black26),
-                     );
-                  }
-                ),
-              ),
-            ),
-
-            const Expanded(child: SizedBox()), 
-
-            GestureDetector(
-              onTap: showDhikrMenu, 
-              onLongPress: showDhikrMenu, 
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-                child: Text(
-                  dhikrList[currentIndex]["text"],
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: textColor, fontSize: 30, fontWeight: FontWeight.bold, height: 1.4),
-                ),
-              ),
-            ),
-
-            const Expanded(child: SizedBox()), 
-
-            // التعديل التاني: العداد جوه إطار مستطيل زواياه دائرية وبصيغة (0000)
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.vibrate(); 
-                setState(() {
-                  mainCounter = 0;
-                  saveData(); 
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("تم تصفير العداد"), duration: Duration(seconds: 1)),
-                );
-              },
-              onLongPress: showTotalStats, 
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 45, vertical: 15),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? Colors.transparent : Colors.white,
-                  border: Border.all(color: borderColor), 
-                  borderRadius: BorderRadius.circular(20), 
-                  boxShadow: [
-                    if (!isDarkMode) BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 5, spreadRadius: 1) 
-                  ]
-                ),
-                child: Text(
-                  mainCounter.toString().padLeft(4, '0'), // يخلي الرقم 0000
-                  style: TextStyle(color: textColor, fontSize: 60, letterSpacing: 6, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 50),
-
-            // زرار الضغط متسنتر في النص
-            Align(
-              alignment: Alignment.center,
-              child: GestureDetector(
-                onTap: incrementCounter,
-                child: Container(
-                  width: 130,
-                  height: 130,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: isDarkMode 
-                          ? [Colors.grey[800]!, Colors.black] 
-                          : [Colors.white, Colors.grey[300]!],
-                      radius: 0.85,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isDarkMode ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.15),
-                        spreadRadius: 3,
-                        blurRadius: 15,
-                        offset: const Offset(0, 5)
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: isDarkMode ? Colors.white12 : Colors.black12, width: 1.5),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 55),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTopBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        border: Border.all(color: Colors.white24, width: 1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Center(
+        child: Text(
+          'صلّ على النبي ﷺ وذكر غيرك',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Arial', // Fallback font, adjust if you have a specific Arabic font
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDisplayScreen() {
+    return Container(
+      height: 140,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0A0A), // Very dark grey/black
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.red.shade900, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.4),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      // Empty container for now, logic will be added later
+    );
+  }
+
+  Widget _buildKeypad() {
+    return Column(
+      children: [
+        // Top row (SHIFT, ALPHA, Arrows, MODE, ON)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSmallControlBtn('SHIFT', Colors.yellow, '', Colors.transparent),
+            _buildSmallControlBtn('ALPHA', Colors.pinkAccent, '', Colors.transparent),
+            // Placeholder for D-Pad
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white12, width: 2),
+                color: const Color(0xFF151515),
+              ),
+              child: const Center(child: Text('Arrows', style: TextStyle(color: Colors.white38, fontSize: 10))),
+            ),
+            _buildSmallControlBtn('MODE SETUP', Colors.white, '', Colors.transparent),
+            _buildSmallControlBtn('ON', Colors.white, '', Colors.transparent),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Scientific Function Rows
+        _buildSciRow4([
+          _buildSciBtn('CALC', topL: 'SOLVE =', topLCol: Colors.yellow, topR: 'd/dx', topRCol: Colors.yellow),
+          _buildSciBtn('∫□', topL: ':', topLCol: Colors.pinkAccent),
+          _buildSciBtn('x⁻¹', topL: 'x!', topLCol: Colors.yellow),
+          _buildSciBtn('log₍₎', topL: 'Σ', topLCol: Colors.yellow),
+        ]),
+        const SizedBox(height: 8),
+        _buildSciRow6([
+          _buildSciBtn('■/□', topL: 'a b/c', topLCol: Colors.yellow),
+          _buildSciBtn('√■', topL: '³√', topLCol: Colors.yellow),
+          _buildSciBtn('x²', topL: 'x³', topLCol: Colors.yellow, topR: 'DEC', topRCol: Colors.cyan),
+          _buildSciBtn('x■', topL: 'ˣ√■', topLCol: Colors.yellow, topR: 'HEX', topRCol: Colors.cyan),
+          _buildSciBtn('log', topL: '10ˣ', topLCol: Colors.yellow, topR: 'BIN', topRCol: Colors.cyan),
+          _buildSciBtn('ln', topL: 'eˣ', topLCol: Colors.yellow, topR: 'OCT', topRCol: Colors.cyan),
+        ]),
+        const SizedBox(height: 8),
+        _buildSciRow6([
+          _buildSciBtn('(-)', topL: '∠', topLCol: Colors.yellow, topR: 'A', topRCol: Colors.pinkAccent),
+          _buildSciBtn('°\'\"', topL: '←', topLCol: Colors.yellow, topR: 'B', topRCol: Colors.pinkAccent),
+          _buildSciBtn('hyp', topL: 'Abs', topLCol: Colors.yellow, topR: 'C', topRCol: Colors.pinkAccent),
+          _buildSciBtn('sin', topL: 'sin⁻¹', topLCol: Colors.yellow, topR: 'D', topRCol: Colors.pinkAccent),
+          _buildSciBtn('cos', topL: 'cos⁻¹', topLCol: Colors.yellow, topR: 'E', topRCol: Colors.pinkAccent),
+          _buildSciBtn('tan', topL: 'tan⁻¹', topLCol: Colors.yellow, topR: 'F', topRCol: Colors.pinkAccent),
+        ]),
+        const SizedBox(height: 8),
+        _buildSciRow6([
+          _buildSciBtn('RCL', topL: 'STO', topLCol: Colors.yellow),
+          _buildSciBtn('ENG', topL: '←', topLCol: Colors.yellow, topR: 'i', topRCol: Colors.pinkAccent),
+          _buildSciBtn('(', topL: '%', topLCol: Colors.yellow),
+          _buildSciBtn(')', topL: ',', topLCol: Colors.yellow, topR: 'X', topRCol: Colors.pinkAccent),
+          _buildSciBtn('S⇔D', topL: 'a b/c ⇔ d/c', topLCol: Colors.yellow, topR: 'Y', topRCol: Colors.pinkAccent),
+          _buildSciBtn('M+', topL: 'M-', topLCol: Colors.yellow, topR: 'M', topRCol: Colors.pinkAccent),
+        ]),
+        const SizedBox(height: 15),
+
+        // Numpad Rows
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildNumRow(['7', '8', '9', 'DEL', 'AC'], topLabels: ['CONST', 'CONV', 'CLR', 'INS', 'OFF']),
+              _buildNumRow(['4', '5', '6', '×', '÷'], topLabels: ['MATRIX', 'VECTOR', '', 'nPr', 'nCr']),
+              _buildNumRow(['1', '2', '3', '+', '-'], topLabels: ['STAT', 'CMPLX', 'BASE', 'Pol', 'Rec']),
+              _buildNumRow(['0', '.', '×10ˣ', 'Ans', '='], topLabels: ['Rnd', 'Ran#', 'π', 'DRG', '']),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- Helper Widgets for Building Buttons ---
+
+  Widget _buildSmallControlBtn(String topText, Color topColor, String mainText, Color mainColor) {
+    return Column(
+      children: [
+        Text(topText, style: TextStyle(color: topColor, fontSize: 10, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 5),
+        Container(
+          width: 35,
+          height: 25,
+          decoration: BoxDecoration(
+            color: const Color(0xFF222222),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.white12, width: 1),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSciRow4(List<Widget> buttons) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: buttons,
+    );
+  }
+
+  Widget _buildSciRow6(List<Widget> buttons) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: buttons,
+    );
+  }
+
+  Widget _buildSciBtn(String text, {String? topL, Color? topLCol, String? topR, Color? topRCol}) {
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (topL != null) Text(topL, style: TextStyle(color: topLCol, fontSize: 8)),
+            if (topL != null && topR != null) const SizedBox(width: 5),
+            if (topR != null) Text(topR, style: TextStyle(color: topRCol, fontSize: 8)),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Container(
+          width: 45,
+          height: 35,
+          decoration: BoxDecoration(
+            color: const Color(0xFF222222),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white10, width: 1),
+          ),
+          child: Center(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNumRow(List<String> texts, {List<String>? topLabels}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(texts.length, (index) {
+        String text = texts[index];
+        bool isGreen = text == 'DEL' || text == 'AC';
+        
+        return Column(
+          children: [
+            if (topLabels != null && topLabels[index].isNotEmpty)
+              Text(
+                topLabels[index],
+                style: const TextStyle(color: Colors.yellow, fontSize: 10),
+              )
+            else
+              const SizedBox(height: 12), // Placeholder to keep alignment
+            const SizedBox(height: 4),
+            Container(
+              width: 60,
+              height: 45,
+              decoration: BoxDecoration(
+                color: isGreen ? const Color(0xFF1B4323) : const Color(0xFF151515),
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(
+                  color: isGreen ? Colors.greenAccent.withOpacity(0.5) : Colors.white12,
+                  width: 1,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    color: isGreen ? Colors.greenAccent : Colors.white,
+                    fontSize: 20,
+                    fontWeight: isGreen ? FontWeight.normal : FontWeight.w300,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }),
     );
   }
 }
