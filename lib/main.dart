@@ -1,5 +1,5 @@
-hereimport 'package:flutter/material.dart';
-import 'dart:async'; // For cursor blinking
+import 'package:flutter/material.dart';
+import 'dart:async';
 
 void main() {
   runApp(const ScientificCalculatorApp());
@@ -30,16 +30,14 @@ class CalculatorHome extends StatefulWidget {
 }
 
 class _CalculatorHomeState extends State<CalculatorHome> {
-  // State variables for Display
-  String _displayText = "0"; // Current input/result
-  String _historyText = ""; // Equation history
-  bool _shouldShowCursor = true; // Cursor blink state
-  Timer? _cursorTimer; // Cursor blink timer
+  String _displayText = "0"; 
+  String _historyText = ""; 
+  bool _shouldShowCursor = true; 
+  Timer? _cursorTimer; 
 
   @override
   void initState() {
     super.initState();
-    // Power is ON by default, start cursor blinking
     _startCursorBlink();
   }
 
@@ -48,8 +46,6 @@ class _CalculatorHomeState extends State<CalculatorHome> {
     _cursorTimer?.cancel();
     super.dispose();
   }
-
-  // --- Display Logic ---
 
   void _startCursorBlink() {
     _cursorTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
@@ -60,8 +56,6 @@ class _CalculatorHomeState extends State<CalculatorHome> {
       }
     });
   }
-
-  // --- Keypad Logic (Basic for now) ---
 
   void _onNumberPressed(String number) {
     setState(() {
@@ -91,9 +85,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
     });
   }
 
-  // Handle other scientific functions later
   void _onSciPressed(String text) {
-    // Basic logic just for show
     setState(() {
       _historyText = text + " ";
     });
@@ -107,15 +99,10 @@ class _CalculatorHomeState extends State<CalculatorHome> {
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
           child: Column(
             children: [
-              // 1. Top Zikr Banner
               _buildTopBanner(),
               const SizedBox(height: 15),
-
-              // 2. Display Screen (Stateful, Power Always ON)
               _buildDisplayScreen(),
               const SizedBox(height: 20),
-
-              // 3. Calculator Keypad (Stateful, with Logic)
               Expanded(
                 child: _buildKeypad(),
               ),
@@ -142,7 +129,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            fontFamily: 'Arial', // Fallback font
+            fontFamily: 'Arial',
           ),
         ),
       ),
@@ -154,9 +141,9 @@ class _CalculatorHomeState extends State<CalculatorHome> {
       height: 140,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF010101), // Very dark background
+        color: const Color(0xFF010101), 
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.red.withOpacity(0.5), width: 1), // Light red border glow
+        border: Border.all(color: Colors.red.withOpacity(0.5), width: 1), 
         boxShadow: [
           BoxShadow(
             color: Colors.red.withOpacity(0.2),
@@ -169,7 +156,6 @@ class _CalculatorHomeState extends State<CalculatorHome> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // History line (Small text)
           Text(
             _historyText,
             style: const TextStyle(
@@ -181,21 +167,19 @@ class _CalculatorHomeState extends State<CalculatorHome> {
             overflow: TextOverflow.ellipsis,
           ),
           const Spacer(),
-          // Main Input Line with Cursor
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               Text(
                 _displayText,
                 style: const TextStyle(
-                  color: Colors.red, // Scientific look (like image_1.png)
+                  color: Colors.red, 
                   fontSize: 48,
                   fontWeight: FontWeight.w100,
-                  fontFamily: 'CourierNew', // Typo look
+                  fontFamily: 'CourierNew', 
                 ),
                 maxLines: 1,
               ),
-              // Blinking Cursor
               Opacity(
                 opacity: _shouldShowCursor ? 1 : 0,
                 child: Container(
@@ -214,21 +198,16 @@ class _CalculatorHomeState extends State<CalculatorHome> {
   Widget _buildKeypad() {
     return Column(
       children: [
-        // 3.1 Control Row (SHIFT, ALPHA, Arrows, MODE SETUP) - ON button removed
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _buildSmallControlBtn('SHIFT', Colors.yellow),
             _buildSmallControlBtn('ALPHA', Colors.pinkAccent),
-            // Correct D-Pad (Arrows) implementation as in image_1.png
             _buildDPadArrows(),
             _buildSmallControlBtn('MODE SETUP', Colors.white, largeText: true),
-            // ON button removed
           ],
         ),
         const SizedBox(height: 10),
-
-        // 3.2 Scientific Function Rows
         _buildSciRow4([
           _buildSciBtn('CALC', topL: 'SOLVE =', topLCol: Colors.yellow, topR: 'd/dx', topRCol: Colors.yellow),
           _buildSciBtn('∫□', topL: ':', topLCol: Colors.pinkAccent),
@@ -263,8 +242,6 @@ class _CalculatorHomeState extends State<CalculatorHome> {
           _buildSciBtn('M+', topL: 'M-', topLCol: Colors.yellow, topR: 'M', topRCol: Colors.pinkAccent),
         ]),
         const SizedBox(height: 15),
-
-        // 3.3 Numpad Rows (Larger, more rounded, functional AC/DEL/Numbers)
         Expanded(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -279,8 +256,6 @@ class _CalculatorHomeState extends State<CalculatorHome> {
       ],
     );
   }
-
-  // --- Helper Widgets for Keypad ---
 
   Widget _buildSmallControlBtn(String topText, Color topColor, {bool largeText = false}) {
     return Column(
@@ -307,11 +282,10 @@ class _CalculatorHomeState extends State<CalculatorHome> {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white12, width: 2),
-        color: const Color(0xFF151515), // D-Pad color like image_1.png
+        color: const Color(0xFF151515), 
       ),
       child: Stack(
         children: [
-          // Basic Arrow Placeholders (since we don't use custom icons yet)
           Align(
               alignment: Alignment.topCenter,
               child: _buildDPadArrowPlaceholder('^')),
@@ -331,11 +305,11 @@ class _CalculatorHomeState extends State<CalculatorHome> {
 
   Widget _buildDPadArrowPlaceholder(String text) {
     return InkWell(
-      onTap: () {}, // Arrow logic later
+      onTap: () {}, 
       child: Container(
         width: 30,
         height: 30,
-        color: Colors.transparent, // Expand tap area
+        color: Colors.transparent, 
         child: Center(
             child: Text(text,
                 style: const TextStyle(color: Colors.white38, fontSize: 16))),
@@ -378,7 +352,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
             width: 45,
             height: 35,
             decoration: BoxDecoration(
-              color: const Color(0xFF222222), // Sci btn color like image_1.png
+              color: const Color(0xFF222222), 
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.white10, width: 1),
             ),
@@ -413,7 +387,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
                     fontWeight: FontWeight.bold),
               )
             else
-              const SizedBox(height: 10), // Placeholder to keep alignment
+              const SizedBox(height: 10), 
             const SizedBox(height: 4),
             InkWell(
               onTap: () {
@@ -426,13 +400,12 @@ class _CalculatorHomeState extends State<CalculatorHome> {
                 }
               },
               child: Container(
-                // Larger and more rounded buttons like image_1.png
                 width: 65,
                 height: 50,
                 decoration: BoxDecoration(
                   color: isSpecial
-                      ? const Color(0xFF1B4323) // Green for AC/DEL
-                      : const Color(0xFF1A1A1A), // Dark for numbers
+                      ? const Color(0xFF1B4323) 
+                      : const Color(0xFF1A1A1A), 
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(
                     color: isSpecial
@@ -451,7 +424,7 @@ class _CalculatorHomeState extends State<CalculatorHome> {
                           isSpecial ? FontWeight.w200 : FontWeight.w400,
                       fontFamily: numpds && !isSpecial
                           ? 'Arial'
-                          : 'Courier', // Numpad special family
+                          : 'Courier', 
                     ),
                   ),
                 ),
